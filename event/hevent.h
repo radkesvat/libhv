@@ -13,7 +13,7 @@
 #include "heap.h"
 #include "queue.h"
 
-#define HLOOP_READ_BUFSIZE          (1U << 17)  // 128K
+#define HLOOP_READ_BUFSIZE          (1U << 16)  // 64K
 #define READ_BUFSIZE_HIGH_WATER     (1U << 20)  // 1M
 #define WRITE_BUFSIZE_HIGH_WATER    (1U << 23)  // 8M
 #define MAX_READ_BUFSIZE            (1U << 24)  // 16M
@@ -119,8 +119,10 @@ struct hio_s {
     hio_type_e  io_type;
     uint32_t    id; // fd cannot be used as unique identifier, so we provide an id
     int         fd;
+#if defined(OS_LINUX) && defined(HAVE_PIPE)
     int         pfd_r; // pipe read file descriptor for splice, (empty by default)
     int         pfd_w; // pipe read file descriptor for splice, (empty by default)
+#endif
     int         error;
     int         events;
     int         revents;

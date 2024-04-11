@@ -251,6 +251,11 @@ static int __nio_read(hio_t* io, void* buf, int len) {
         nread = hssl_read(io->ssl, buf, len);
         break;
     case HIO_TYPE_TCP:
+#if defined(OS_LINUX) && defined(HAVE_PIPE)
+        if(io->pfd_w){
+            nread = splice(io->fd, NULL,io->pfd_w,0, len, SPLICE_F_NONBLOCK); 
+        }else
+#endif
         nread = recv(io->fd, buf, len, 0);
         break;
     case HIO_TYPE_UDP:
@@ -277,6 +282,12 @@ static int __nio_write(hio_t* io, const void* buf, int len) {
         break;
     case HIO_TYPE_TCP:
     {
+#if defined(OS_LINUX) && defined(HAVE_PIPE)
+    if(io->pfd_r){
+        nwrite = splice(io->pfd_r, NULL,io->fd,0, len, SPLICE_F_NONBLOCK); 
+        break;
+    }
+#endif
         int flag = 0;
 #ifdef MSG_NOSIGNAL
         flag |= MSG_NOSIGNAL;
@@ -303,6 +314,11 @@ static void nio_read(hio_t* io) {
     int len = 0, nread = 0, err = 0;
 read:
     buf = io->readbuf.base + io->readbuf.tail;
+#if defined(OS_LINUX) && defined(HAVE_PIPE)
+    if(io->pfd_w){
+        len = (1U << 22); // 1 MB
+    }else
+#endif
     if (io->read_flags & HIO_READ_UNTIL_LENGTH) {
         len = io->read_until_length - (io->readbuf.tail - io->readbuf.head);
     } else {
@@ -328,10 +344,19 @@ read:
     if (nread == 0) {
         goto disconnect;
     }
+    // printf("%d \n",nread);
+#if defined(OS_LINUX) && defined(HAVE_PIPE)
+    if(io->pfd_w == 0x0 && nread < len){
+        // NOTE: make string friendly
+        ((char*)buf)[nread] = '\0';
+    }
+#else
     if (nread < len) {
         // NOTE: make string friendly
         ((char*)buf)[nread] = '\0';
     }
+#endif
+
     io->readbuf.tail += nread;
     __read_cb(io, buf, nread);
     if (nread == len && !io->closed) {
@@ -388,7 +413,12 @@ write:
     if (nwrite == len) {
         // NOTE: after write_cb, pbuf maybe invalid.
         // HV_FREE(pbuf->base);
+#if defined(OS_LINUX) && defined(HAVE_PIPE)
+    if(io->pfd_w == 0)
         HV_FREE(base);
+#else
+        HV_FREE(base);
+#endif
         write_queue_pop_front(&io->write_queue);
         if (!io->closed) {
             // write continue
@@ -519,6 +549,7 @@ try_write:
 enqueue:
         hio_add(io, hio_handle_events, HV_WRITE);
     }
+
     if (nwrite < len) {
         if (io->write_bufsize + len - nwrite > io->max_write_bufsize) {
             hloge("write bufsize > %u, close it!", io->max_write_bufsize);
@@ -528,9 +559,21 @@ enqueue:
         offset_buf_t remain;
         remain.len = len - nwrite;
         remain.offset = 0;
+#if defined(OS_LINUX) && defined(HAVE_PIPE)
+        if(io->pfd_w != 0){
+            remain.base = 0X0; // skips free()
+            
+        }else
+        {
+            // NOTE: free in nio_write
+            HV_ALLOC(remain.base, remain.len);
+            memcpy(remain.base, ((char*)buf) + nwrite, remain.len);
+        }
+#else
         // NOTE: free in nio_write
         HV_ALLOC(remain.base, remain.len);
         memcpy(remain.base, ((char*)buf) + nwrite, remain.len);
+#endif
         if (io->write_queue.maxsize == 0) {
             write_queue_init(&io->write_queue, 4);
         }
