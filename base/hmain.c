@@ -389,7 +389,7 @@ pid_t getpid_from_pidfile() {
         return -1;
     }
     int pid = -1;
-    fscanf(fp, "%d", &pid);
+    (void) fscanf(fp, "%d", &pid);
     fclose(fp);
     return pid;
 }
