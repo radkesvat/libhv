@@ -903,10 +903,28 @@ void hio_close_upstream(hio_t* io) {
         hio_close(upstream_io);
     }
 }
+#ifdef OS_LINUX
+bool hio_setup_pipe(hio_t* io){
+    int fds[2];
+    if(pipe(fd)){
+        io->pfd_r = fds_1[0];
+        io->pfd_w = fds_1[1];
+    }
+
+}
+#endif
+
 
 void hio_setup_upstream(hio_t* io1, hio_t* io2) {
     io1->upstream_io = io2;
     io2->upstream_io = io1;
+#ifdef OS_LINUX
+    if(io->io_type == HIO_TYPE_TCP && io2->io_type == HIO_TYPE_TCP)
+    {
+        hio_setup_pipe(io);
+        hio_setup_pipe(io2);
+    }
+#endif
 }
 
 hio_t* hio_get_upstream(hio_t* io) {

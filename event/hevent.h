@@ -119,6 +119,8 @@ struct hio_s {
     hio_type_e  io_type;
     uint32_t    id; // fd cannot be used as unique identifier, so we provide an id
     int         fd;
+    int         pfd_r; // pipe read file descriptor for splice, (empty by default)
+    int         pfd_w; // pipe read file descriptor for splice, (empty by default)
     int         error;
     int         events;
     int         revents;
