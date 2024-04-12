@@ -13,7 +13,7 @@
 #include "heap.h"
 #include "queue.h"
 
-#define HLOOP_READ_BUFSIZE          (1U << 16)  // 64K
+#define HLOOP_READ_BUFSIZE          (1U << 13)  // 8K
 #define READ_BUFSIZE_HIGH_WATER     (1U << 20)  // 1M
 #define WRITE_BUFSIZE_HIGH_WATER    (1U << 23)  // 8M
 #define MAX_READ_BUFSIZE            (1U << 24)  // 16M
