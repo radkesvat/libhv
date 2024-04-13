@@ -11,6 +11,12 @@
 #define environ (*_NSGetEnviron())
 #endif
 
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-truncation"
+#endif
+
+
 main_ctx_t  g_main_ctx;
 
 static void init_arg_kv(int maxsize) {
@@ -389,7 +395,7 @@ pid_t getpid_from_pidfile() {
         return -1;
     }
     int pid = -1;
-    (void) fscanf(fp, "%d", &pid);
+    int _ = fscanf(fp, "%d", &pid);
     fclose(fp);
     return pid;
 }
@@ -672,3 +678,7 @@ int master_workers_run(procedure_t worker_fn, void* worker_userdata,
     }
     return 0;
 }
+
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic pop
+#endif

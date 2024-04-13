@@ -205,6 +205,11 @@ const char* logger_get_cur_file(logger_t* logger) {
     return logger->cur_logfile;
 }
 
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-truncation"
+#endif
+
 static void logfile_name(const char* filepath, time_t ts, char* buf, int len) {
     struct tm* tm = localtime(&ts);
     snprintf(buf, len, "%s.%04d%02d%02d.log",
@@ -213,6 +218,9 @@ static void logfile_name(const char* filepath, time_t ts, char* buf, int len) {
             tm->tm_mon+1,
             tm->tm_mday);
 }
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic pop
+#endif
 
 static FILE* logfile_shift(logger_t* logger) {
     time_t ts_now = time(NULL);
