@@ -23,18 +23,18 @@ static void fill_io_type(hio_t* io) {
     printd("getsockopt SO_TYPE fd=%d ret=%d type=%d errno=%d\n", io->fd, ret, type, socket_errno());
     if (ret == 0) {
         switch (type) {
-        case SOCK_STREAM:   io->io_type = HIO_TYPE_TCP; break;
-        case SOCK_DGRAM:    io->io_type = HIO_TYPE_UDP; break;
-        case SOCK_RAW:      io->io_type = HIO_TYPE_IP;  break;
-        default: io->io_type = HIO_TYPE_SOCKET;         break;
+        case SOCK_STREAM: io->io_type = HIO_TYPE_TCP; break;
+        case SOCK_DGRAM: io->io_type = HIO_TYPE_UDP; break;
+        case SOCK_RAW: io->io_type = HIO_TYPE_IP; break;
+        default: io->io_type = HIO_TYPE_SOCKET; break;
         }
     }
     else if (socket_errno() == ENOTSOCK) {
         switch (io->fd) {
-        case 0: io->io_type = HIO_TYPE_STDIN;   break;
-        case 1: io->io_type = HIO_TYPE_STDOUT;  break;
-        case 2: io->io_type = HIO_TYPE_STDERR;  break;
-        default: io->io_type = HIO_TYPE_FILE;   break;
+        case 0: io->io_type = HIO_TYPE_STDIN; break;
+        case 1: io->io_type = HIO_TYPE_STDOUT; break;
+        case 2: io->io_type = HIO_TYPE_STDERR; break;
+        default: io->io_type = HIO_TYPE_FILE; break;
         }
     }
     else {
@@ -46,7 +46,8 @@ static void hio_socket_init(hio_t* io) {
     if ((io->io_type & HIO_TYPE_SOCK_DGRAM) || (io->io_type & HIO_TYPE_SOCK_RAW)) {
         // NOTE: sendto multiple peeraddr cannot use io->write_queue
         blocking(io->fd);
-    } else {
+    }
+    else {
         nonblocking(io->fd);
     }
     // fill io->localaddr io->peeraddr
@@ -178,7 +179,7 @@ void hio_done(hio_t* io) {
     while (!write_queue_empty(&io->write_queue)) {
         pbuf = write_queue_front(&io->write_queue);
 #if defined(OS_LINUX) && defined(HAVE_PIPE)
-        if(pbuf->base != NULL) HV_FREE(pbuf->base);
+        if (pbuf->base != NULL) HV_FREE(pbuf->base);
 
 #else
         HV_FREE(pbuf->base);
@@ -220,7 +221,7 @@ bool hio_is_closed(hio_t* io) {
     return io->ready == 0 && io->closed == 1;
 }
 
-uint32_t hio_id (hio_t* io) {
+uint32_t hio_id(hio_t* io) {
     return io->id;
 }
 
@@ -905,6 +906,48 @@ void hio_write_upstream(hio_t* io, void* buf, int bytes) {
         }
     }
 }
+#if defined(OS_LINUX) && defined(HAVE_PIPE)
+
+void hio_close_upstream(hio_t* io) {
+    hio_t* upstream_io = io->upstream_io;
+    if(io->pfd_w != 0x0){
+        close(io->pfd_w);
+        close(io->pfd_r);
+    }
+    if (upstream_io) {
+        hio_close(upstream_io);
+    }
+}
+
+static bool hio_setup_pipe(hio_t* io) {
+    int fds[2];
+    int r = pipe(fds);
+    if (r != 0) 
+        return false;
+    io->pfd_r = fds[0];
+    io->pfd_w = fds[1];
+    return true;
+
+}
+
+void hio_setup_upstream_splice(hio_t* restrict io1, hio_t* restrict io2) {
+    io1->upstream_io = io2;
+    io2->upstream_io = io1;
+    assert (io1->io_type == HIO_TYPE_TCP && io2->io_type == HIO_TYPE_TCP);
+    if (!hio_setup_pipe(io1))
+        return;
+    
+    if (!hio_setup_pipe(io2)){
+        close(io1->pfd_w);
+        close(io1->pfd_r);
+        io1->pfd_w = io1->pfd_r = 0;
+        return;
+    }
+    const int tmp_fd = io1->pfd_w;
+    io1->pfd_w = io2->pfd_w;
+    io2->pfd_w = tmp_fd;
+}
+#else
 
 void hio_close_upstream(hio_t* io) {
     hio_t* upstream_io = io->upstream_io;
@@ -912,36 +955,7 @@ void hio_close_upstream(hio_t* io) {
         hio_close(upstream_io);
     }
 }
-#if defined(OS_LINUX) && defined(HAVE_PIPE)
 
-
-bool hio_setup_pipe(hio_t* io) {
-    int fds[2];
-    int r  = pipe(fds);
-    if (r == 0) {
-        io->pfd_r = fds[0];
-        io->pfd_w = fds[1];
-    }
-}
-
-void hio_setup_upstream_splice(hio_t* restrict io1, hio_t* restrict io2) {
-    io1->upstream_io = io2;
-    io2->upstream_io = io1;
-    if (io1->io_type == HIO_TYPE_TCP && io2->io_type == HIO_TYPE_TCP) {
-        hio_setup_pipe(io1);
-        hio_setup_pipe(io2);
-    }
-    const int tmp_fd = io1->pfd_w;
-    io1->pfd_w = io2->pfd_w;
-    io2->pfd_w = tmp_fd;
-    
-
-    // hio_read_stop(io1);
-    // hio_read_stop(io2);
-
-    // hio_close(io);
-
-}
 #endif
 
 void hio_setup_upstream(hio_t* restrict io1, hio_t* restrict io2) {
