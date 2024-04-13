@@ -180,10 +180,8 @@ void hio_done(hio_t* io) {
         pbuf = write_queue_front(&io->write_queue);
 #if defined(OS_LINUX) && defined(HAVE_PIPE)
         if (pbuf->base != NULL) HV_FREE(pbuf->base);
-
 #else
         HV_FREE(pbuf->base);
-
 #endif
         write_queue_pop_front(&io->write_queue);
     }

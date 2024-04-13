@@ -316,7 +316,7 @@ read:
     buf = io->readbuf.base + io->readbuf.tail;
 #if defined(OS_LINUX) && defined(HAVE_PIPE)
     if(io->pfd_w){
-        len = (1U << 22); // 1 MB
+        len = (1U << 20); // 1 MB
     }else
 #endif
     if (io->read_flags & HIO_READ_UNTIL_LENGTH) {
