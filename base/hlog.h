@@ -140,6 +140,7 @@ HV_EXPORT void      hv_destroy_default_logger(void);
 #define hlog_disable_fsync()            logger_enable_fsync(hlog, 0)
 #define hlog_fsync()                    logger_fsync(hlog)
 #define hlog_get_cur_file()             logger_get_cur_file(hlog)
+#define hlog_will_write(level)          logger_will_write_level(hlog,level)
 
 #define hlogd(fmt, ...) logger_print(hlog, LOG_LEVEL_DEBUG, fmt " [%s:%d:%s]", ## __VA_ARGS__, __FILENAME__, __LINE__, __FUNCTION__)
 #define hlogi(fmt, ...) logger_print(hlog, LOG_LEVEL_INFO,  fmt " [%s:%d:%s]", ## __VA_ARGS__, __FILENAME__, __LINE__, __FUNCTION__)
