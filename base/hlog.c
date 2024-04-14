@@ -134,6 +134,10 @@ void logger_set_level_by_str(logger_t* logger, const char* szLoglevel) {
     logger->level = loglevel;
 }
 
+HV_EXPORT bool logger_will_write_level(logger_t* logger, log_level_e level) {
+    return (logger->level) >= level;
+}
+
 void logger_set_format(logger_t* logger, const char* format) {
     if (format) {
         strncpy(logger->format, format, sizeof(logger->format) - 1);

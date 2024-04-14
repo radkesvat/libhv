@@ -6,6 +6,7 @@
  */
 
 #include <string.h>
+#include <stdbool.h>
 
 #ifdef _WIN32
 #define DIR_SEPARATOR       '\\'
@@ -86,6 +87,8 @@ HV_EXPORT void logger_set_handler(logger_t* logger, logger_handler fn);
 HV_EXPORT void logger_set_level(logger_t* logger, int level);
 // level = [VERBOSE,DEBUG,INFO,WARN,ERROR,FATAL,SILENT]
 HV_EXPORT void logger_set_level_by_str(logger_t* logger, const char* level);
+HV_EXPORT bool logger_will_write_level(logger_t* logger, log_level_e level);
+
 /*
  * format  = "%y-%m-%d %H:%M:%S.%z %L %s"
  * message = "2020-01-02 03:04:05.067 DEBUG message"
