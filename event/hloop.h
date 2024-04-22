@@ -4,7 +4,6 @@
 #include "hexport.h"
 #include "hplatform.h"
 #include "hdef.h"
-#include "hssl.h"
 
 typedef struct hloop_s      hloop_t;
 typedef struct hevent_s     hevent_t;
@@ -104,8 +103,8 @@ typedef enum {
     HIO_TYPE_SOCK_DGRAM = 0x000FF000,
 
     HIO_TYPE_TCP        = 0x00100000,
-    HIO_TYPE_SSL        = 0x01000000,
-    HIO_TYPE_TLS        = HIO_TYPE_SSL,
+    // HIO_TYPE_SSL        = 0x01000000,
+    // HIO_TYPE_TLS        = HIO_TYPE_SSL,
     HIO_TYPE_SOCK_STREAM= 0x0FF00000,
 
     HIO_TYPE_SOCKET     = 0x0FFFFF00,
@@ -306,19 +305,6 @@ HV_EXPORT hread_cb    hio_getcb_read(hio_t* io);
 HV_EXPORT hwrite_cb   hio_getcb_write(hio_t* io);
 HV_EXPORT hclose_cb   hio_getcb_close(hio_t* io);
 
-// Enable SSL/TLS is so easy :)
-HV_EXPORT int  hio_enable_ssl(hio_t* io);
-HV_EXPORT bool hio_is_ssl(hio_t* io);
-HV_EXPORT int  hio_set_ssl    (hio_t* io, hssl_t ssl);
-HV_EXPORT int  hio_set_ssl_ctx(hio_t* io, hssl_ctx_t ssl_ctx);
-// hssl_ctx_new(opt) -> hio_set_ssl_ctx
-HV_EXPORT int  hio_new_ssl_ctx(hio_t* io, hssl_ctx_opt_t* opt);
-HV_EXPORT hssl_t     hio_get_ssl(hio_t* io);
-HV_EXPORT hssl_ctx_t hio_get_ssl_ctx(hio_t* io);
-// for hssl_set_sni_hostname
-HV_EXPORT int         hio_set_hostname(hio_t* io, const char* hostname);
-HV_EXPORT const char* hio_get_hostname(hio_t* io);
-
 // connect timeout => hclose_cb
 HV_EXPORT void hio_set_connect_timeout(hio_t* io, int timeout_ms DEFAULT(HIO_DEFAULT_CONNECT_TIMEOUT));
 // close timeout => hclose_cb
@@ -355,13 +341,13 @@ HV_EXPORT int hio_read   (hio_t* io);
 // hio_read_start => hread_cb => hio_read_stop
 HV_EXPORT int hio_read_once (hio_t* io);
 // hio_read_once => hread_cb(len)
-HV_EXPORT int hio_read_until_length(hio_t* io, unsigned int len);
+// HV_EXPORT int hio_read_until_length(hio_t* io, unsigned int len);
 // hio_read_once => hread_cb(...delim)
-HV_EXPORT int hio_read_until_delim (hio_t* io, unsigned char delim);
+// HV_EXPORT int hio_read_until_delim (hio_t* io, unsigned char delim);
 HV_EXPORT int hio_read_remain(hio_t* io);
 // @see examples/tinyhttpd.c examples/tinyproxyd.c
-#define hio_readline(io)        hio_read_until_delim(io, '\n')
-#define hio_readstring(io)      hio_read_until_delim(io, '\0')
+// #define hio_readline(io)        hio_read_until_delim(io, '\n')
+// #define hio_readstring(io)      hio_read_until_delim(io, '\0')
 #define hio_readbytes(io, len)  hio_read_until_length(io, len)
 #define hio_read_until(io, len) hio_read_until_length(io, len)
 
@@ -420,14 +406,6 @@ HV_EXPORT hio_t* hloop_create_tcp_server (hloop_t* loop, const char* host, int p
 // @see examples/nc.c
 HV_EXPORT hio_t* hloop_create_tcp_client (hloop_t* loop, const char* host, int port, hconnect_cb connect_cb, hclose_cb close_cb);
 
-// @ssl_server: hio_create_socket(loop, host, port, HIO_TYPE_SSL, HIO_SERVER_SIDE) -> hio_setcb_accept -> hio_accept
-// @see examples/tcp_echo_server.c => #define TEST_SSL 1
-HV_EXPORT hio_t* hloop_create_ssl_server (hloop_t* loop, const char* host, int port, haccept_cb accept_cb);
-
-// @ssl_client: hio_create_socket(loop, host, port, HIO_TYPE_SSL, HIO_CLIENT_SIDE) -> hio_setcb_connect -> hio_setcb_close -> hio_connect
-// @see examples/nc.c => #define TEST_SSL 1
-HV_EXPORT hio_t* hloop_create_ssl_client (hloop_t* loop, const char* host, int port, hconnect_cb connect_cb, hclose_cb close_cb);
-
 // @udp_server: hio_create_socket(loop, host, port, HIO_TYPE_UDP, HIO_SERVER_SIDE)
 // @see examples/udp_echo_server.c
 HV_EXPORT hio_t* hloop_create_udp_server (hloop_t* loop, const char* host, int port);
@@ -455,11 +433,6 @@ HV_EXPORT void   hio_setup_upstream(hio_t* io1, hio_t* io2);
 // @return io->upstream_io
 HV_EXPORT hio_t* hio_get_upstream(hio_t* io);
 
-// @tcp_upstream: hio_create_socket -> hio_setup_upstream -> hio_connect -> on_connect -> hio_read_upstream
-// @return upstream_io
-// @see examples/tcp_proxy_server.c
-HV_EXPORT hio_t* hio_setup_tcp_upstream(hio_t* io, const char* host, int port, int ssl DEFAULT(0));
-#define hio_setup_ssl_upstream(io, host, port) hio_setup_tcp_upstream(io, host, port, 1)
 
 // @udp_upstream: hio_create_socket -> hio_setup_upstream -> hio_read_upstream
 // @return upstream_io

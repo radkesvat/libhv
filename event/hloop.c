@@ -417,7 +417,7 @@ hloop_t* hloop_new(int flags) {
     HV_ALLOC_SIZEOF(loop);
     hloop_init(loop);
     loop->flags |= flags;
-    hlogd("hloop_new tid=%ld", loop->tid);
+    // hlogd("hloop_new tid=%ld", loop->tid);
     return loop;
 }
 
@@ -440,7 +440,7 @@ int hloop_run(hloop_t* loop) {
     loop->status = HLOOP_STATUS_RUNNING;
     loop->pid = hv_getpid();
     loop->tid = hv_gettid();
-    hlogd("hloop_run tid=%ld", loop->tid);
+    // hlogd("hloop_run tid=%ld", loop->tid);
 
     if (loop->intern_nevents == 0) {
         hmutex_lock(&loop->custom_events_mutex);
@@ -1001,22 +1001,7 @@ hio_t* hloop_create_tcp_client (hloop_t* loop, const char* host, int port, hconn
     return io;
 }
 
-hio_t* hloop_create_ssl_server (hloop_t* loop, const char* host, int port, haccept_cb accept_cb) {
-    hio_t* io = hio_create_socket(loop, host, port, HIO_TYPE_SSL, HIO_SERVER_SIDE);
-    if (io == NULL) return NULL;
-    hio_setcb_accept(io, accept_cb);
-    if (hio_accept(io) != 0) return NULL;
-    return io;
-}
 
-hio_t* hloop_create_ssl_client (hloop_t* loop, const char* host, int port, hconnect_cb connect_cb, hclose_cb close_cb) {
-    hio_t* io = hio_create_socket(loop, host, port, HIO_TYPE_SSL, HIO_CLIENT_SIDE);
-    if (io == NULL) return NULL;
-    hio_setcb_connect(io, connect_cb);
-    hio_setcb_close(io, close_cb);
-    if (hio_connect(io) != 0) return NULL;
-    return io;
-}
 
 hio_t* hloop_create_udp_server(hloop_t* loop, const char* host, int port) {
     return hio_create_socket(loop, host, port, HIO_TYPE_UDP, HIO_SERVER_SIDE);

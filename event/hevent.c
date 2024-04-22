@@ -132,17 +132,6 @@ void hio_ready(hio_t* io) {
     io->heartbeat_interval = 0;
     io->heartbeat_fn = NULL;
     io->heartbeat_timer = NULL;
-    // upstream
-    io->upstream_io = NULL;
-    // unpack
-    io->unpack_setting = NULL;
-    // ssl
-    io->ssl = NULL;
-    io->ssl_ctx = NULL;
-    io->alloced_ssl_ctx = 0;
-    io->hostname = NULL;
-    // context
-    io->ctx = NULL;
     // private:
 #if defined(EVENT_POLL) || defined(EVENT_KQUEUE)
     io->event_index[0] = io->event_index[1] = -1;
@@ -252,14 +241,6 @@ struct sockaddr* hio_peeraddr(hio_t* io) {
     return io->peeraddr;
 }
 
-void hio_set_context(hio_t* io, void* ctx) {
-    io->ctx = ctx;
-}
-
-void* hio_context(hio_t* io) {
-    return io->ctx;
-}
-
 haccept_cb hio_getcb_accept(hio_t* io) {
     return io->accept_cb;
 }
@@ -340,46 +321,12 @@ void hio_handle_read(hio_t* io, void* buf, int readbytes) {
     }
 #endif
 
-    if (io->unpack_setting) {
-        // hio_set_unpack
-        hio_unpack(io, buf, readbytes);
-    }
-    else {
-        const unsigned char* sp = (const unsigned char*)io->readbuf.base + io->readbuf.head;
-        const unsigned char* ep = (const unsigned char*)buf + readbytes;
-        if (io->read_flags & HIO_READ_UNTIL_LENGTH) {
-            // hio_read_until_length
-            if (ep - sp >= io->read_until_length) {
-                io->readbuf.head += io->read_until_length;
-                if (io->readbuf.head == io->readbuf.tail) {
-                    io->readbuf.head = io->readbuf.tail = 0;
-                }
-                io->read_flags &= ~HIO_READ_UNTIL_LENGTH;
-                hio_read_cb(io, (void*)sp, io->read_until_length);
-            }
-        }
-        else if (io->read_flags & HIO_READ_UNTIL_DELIM) {
-            // hio_read_until_delim
-            const unsigned char* p = (const unsigned char*)buf;
-            for (int i = 0; i < readbytes; ++i, ++p) {
-                if (*p == io->read_until_delim) {
-                    int len = p - sp + 1;
-                    io->readbuf.head += len;
-                    if (io->readbuf.head == io->readbuf.tail) {
-                        io->readbuf.head = io->readbuf.tail = 0;
-                    }
-                    io->read_flags &= ~HIO_READ_UNTIL_DELIM;
-                    hio_read_cb(io, (void*)sp, len);
-                    return;
-                }
-            }
-        }
-        else {
-            // hio_read
-            io->readbuf.head = io->readbuf.tail = 0;
-            hio_read_cb(io, (void*)sp, ep - sp);
-        }
-    }
+    const unsigned char* sp = (const unsigned char*)io->readbuf.base + io->readbuf.head;
+    const unsigned char* ep = (const unsigned char*)buf + readbytes;
+
+    // hio_read
+    io->readbuf.head = io->readbuf.tail = 0;
+    hio_read_cb(io, (void*)sp, ep - sp);
 
     if (io->readbuf.head == io->readbuf.tail) {
         io->readbuf.head = io->readbuf.tail = 0;
@@ -461,52 +408,6 @@ void hio_set_peeraddr(hio_t* io, struct sockaddr* addr, int addrlen) {
         HV_ALLOC(io->peeraddr, sizeof(sockaddr_u));
     }
     memcpy(io->peeraddr, addr, addrlen);
-}
-
-int hio_enable_ssl(hio_t* io) {
-    io->io_type = HIO_TYPE_SSL;
-    return 0;
-}
-
-bool hio_is_ssl(hio_t* io) {
-    return io->io_type == HIO_TYPE_SSL;
-}
-
-hssl_t hio_get_ssl(hio_t* io) {
-    return io->ssl;
-}
-
-hssl_ctx_t hio_get_ssl_ctx(hio_t* io) {
-    return io->ssl_ctx;
-}
-
-int hio_set_ssl(hio_t* io, hssl_t ssl) {
-    io->io_type = HIO_TYPE_SSL;
-    io->ssl = ssl;
-    return 0;
-}
-
-int hio_set_ssl_ctx(hio_t* io, hssl_ctx_t ssl_ctx) {
-    io->io_type = HIO_TYPE_SSL;
-    io->ssl_ctx = ssl_ctx;
-    return 0;
-}
-
-int hio_new_ssl_ctx(hio_t* io, hssl_ctx_opt_t* opt) {
-    hssl_ctx_t ssl_ctx = hssl_ctx_new(opt);
-    if (ssl_ctx == NULL) return ERR_NEW_SSL_CTX;
-    io->alloced_ssl_ctx = 1;
-    return hio_set_ssl_ctx(io, ssl_ctx);
-}
-
-int hio_set_hostname(hio_t* io, const char* hostname) {
-    SAFE_FREE(io->hostname);
-    io->hostname = strdup(hostname);
-    return 0;
-}
-
-const char* hio_get_hostname(hio_t* io) {
-    return io->hostname;
 }
 
 void hio_del_connect_timer(hio_t* io) {
@@ -800,33 +701,6 @@ int hio_read_until_length(hio_t* io, unsigned int len) {
     return hio_read_once(io);
 }
 
-int hio_read_until_delim(hio_t* io, unsigned char delim) {
-    if (io->readbuf.tail - io->readbuf.head > 0) {
-        const unsigned char* sp = (const unsigned char*)io->readbuf.base + io->readbuf.head;
-        const unsigned char* ep = (const unsigned char*)io->readbuf.base + io->readbuf.tail;
-        const unsigned char* p = sp;
-        while (p <= ep) {
-            if (*p == delim) {
-                int len = p - sp + 1;
-                io->readbuf.head += len;
-                if (io->readbuf.head == io->readbuf.tail) {
-                    io->readbuf.head = io->readbuf.tail = 0;
-                }
-                hio_read_cb(io, (void*)sp, len);
-                return len;
-            }
-            ++p;
-        }
-    }
-    io->read_flags = HIO_READ_UNTIL_DELIM;
-    io->read_until_length = delim;
-    // NOTE: prepare readbuf
-    if (hio_is_loop_readbuf(io) || io->readbuf.len < HLOOP_READ_BUFSIZE) {
-        hio_alloc_readbuf(io, HLOOP_READ_BUFSIZE);
-    }
-    return hio_read_once(io);
-}
-
 int hio_read_remain(hio_t* io) {
     int remain = io->readbuf.tail - io->readbuf.head;
     if (remain > 0) {
@@ -837,161 +711,120 @@ int hio_read_remain(hio_t* io) {
     return remain;
 }
 
-//-----------------unpack---------------------------------------------
-void hio_set_unpack(hio_t* io, unpack_setting_t* setting) {
-    hio_unset_unpack(io);
-    if (setting == NULL) return;
-
-    io->unpack_setting = setting;
-    if (io->unpack_setting->package_max_length == 0) {
-        io->unpack_setting->package_max_length = DEFAULT_PACKAGE_MAX_LENGTH;
-    }
-    if (io->unpack_setting->mode == UNPACK_BY_FIXED_LENGTH) {
-        assert(io->unpack_setting->fixed_length != 0 && io->unpack_setting->fixed_length <= io->unpack_setting->package_max_length);
-    }
-    else if (io->unpack_setting->mode == UNPACK_BY_DELIMITER) {
-        if (io->unpack_setting->delimiter_bytes == 0) {
-            io->unpack_setting->delimiter_bytes = strlen((char*)io->unpack_setting->delimiter);
-        }
-    }
-    else if (io->unpack_setting->mode == UNPACK_BY_LENGTH_FIELD) {
-        assert(io->unpack_setting->body_offset >= io->unpack_setting->length_field_offset + io->unpack_setting->length_field_bytes);
-    }
-
-    // NOTE: unpack must have own readbuf
-    if (io->unpack_setting->mode == UNPACK_BY_FIXED_LENGTH) {
-        io->readbuf.len = io->unpack_setting->fixed_length;
-    }
-    else {
-        io->readbuf.len = MIN(HLOOP_READ_BUFSIZE, io->unpack_setting->package_max_length);
-    }
-    io->max_read_bufsize = io->unpack_setting->package_max_length;
-    hio_alloc_readbuf(io, io->readbuf.len);
-}
-
-void hio_unset_unpack(hio_t* io) {
-    if (io->unpack_setting) {
-        io->unpack_setting = NULL;
-        // NOTE: unpack has own readbuf
-        hio_free_readbuf(io);
-    }
-}
-
 //-----------------upstream---------------------------------------------
-void hio_read_upstream(hio_t* io) {
-    hio_t* upstream_io = io->upstream_io;
-    if (upstream_io) {
-        hio_read(io);
-        hio_read(upstream_io);
-    }
-}
+// void hio_read_upstream(hio_t* io) {
+//     hio_t* upstream_io = io->upstream_io;
+//     if (upstream_io) {
+//         hio_read(io);
+//         hio_read(upstream_io);
+//     }
+// }
 
-void hio_read_upstream_on_write_complete(hio_t* io, const void* buf, int writebytes) {
-    hio_t* upstream_io = io->upstream_io;
-    if (upstream_io && hio_write_is_complete(io)) {
-        hio_setcb_write(io, NULL);
-        hio_read(upstream_io);
-    }
-}
+// void hio_read_upstream_on_write_complete(hio_t* io, const void* buf, int writebytes) {
+//     hio_t* upstream_io = io->upstream_io;
+//     if (upstream_io && hio_write_is_complete(io)) {
+//         hio_setcb_write(io, NULL);
+//         hio_read(upstream_io);
+//     }
+// }
 
-void hio_write_upstream(hio_t* io, void* buf, int bytes) {
-    hio_t* upstream_io = io->upstream_io;
-    if (upstream_io) {
-        int nwrite = hio_write(upstream_io, buf, bytes);
-        // if (!hio_write_is_complete(upstream_io)) {
-        if (nwrite >= 0 && nwrite < bytes) {
-            hio_read_stop(io);
-            hio_setcb_write(upstream_io, hio_read_upstream_on_write_complete);
-        }
-    }
-}
-#if defined(OS_LINUX) && defined(HAVE_PIPE)
+// void hio_write_upstream(hio_t* io, void* buf, int bytes) {
+//     hio_t* upstream_io = io->upstream_io;
+//     if (upstream_io) {
+//         int nwrite = hio_write(upstream_io, buf, bytes);
+//         // if (!hio_write_is_complete(upstream_io)) {
+//         if (nwrite >= 0 && nwrite < bytes) {
+//             hio_read_stop(io);
+//             hio_setcb_write(upstream_io, hio_read_upstream_on_write_complete);
+//         }
+//     }
+// }
+// #if defined(OS_LINUX) && defined(HAVE_PIPE)
 
-void hio_close_upstream(hio_t* io) {
-    hio_t* upstream_io = io->upstream_io;
-    if(io->pfd_w != 0x0){
-        close(io->pfd_w);
-        close(io->pfd_r);
-    }
-    if (upstream_io) {
-        hio_close(upstream_io);
-    }
-}
+// void hio_close_upstream(hio_t* io) {
+//     hio_t* upstream_io = io->upstream_io;
+//     if(io->pfd_w != 0x0){
+//         close(io->pfd_w);
+//         close(io->pfd_r);
+//     }
+//     if (upstream_io) {
+//         hio_close(upstream_io);
+//     }
+// }
 
-static bool hio_setup_pipe(hio_t* io) {
-    int fds[2];
-    int r = pipe(fds);
-    if (r != 0) 
-        return false;
-    io->pfd_r = fds[0];
-    io->pfd_w = fds[1];
-    return true;
+// static bool hio_setup_pipe(hio_t* io) {
+//     int fds[2];
+//     int r = pipe(fds);
+//     if (r != 0)
+//         return false;
+//     io->pfd_r = fds[0];
+//     io->pfd_w = fds[1];
+//     return true;
 
-}
+// }
 
-void hio_setup_upstream_splice(hio_t* restrict io1, hio_t* restrict io2) {
-    io1->upstream_io = io2;
-    io2->upstream_io = io1;
-    assert (io1->io_type == HIO_TYPE_TCP && io2->io_type == HIO_TYPE_TCP);
-    if (!hio_setup_pipe(io1))
-        return;
-    
-    if (!hio_setup_pipe(io2)){
-        close(io1->pfd_w);
-        close(io1->pfd_r);
-        io1->pfd_w = io1->pfd_r = 0;
-        return;
-    }
-    const int tmp_fd = io1->pfd_w;
-    io1->pfd_w = io2->pfd_w;
-    io2->pfd_w = tmp_fd;
-}
-#else
+// void hio_setup_upstream_splice(hio_t* restrict io1, hio_t* restrict io2) {
+//     io1->upstream_io = io2;
+//     io2->upstream_io = io1;
+//     assert (io1->io_type == HIO_TYPE_TCP && io2->io_type == HIO_TYPE_TCP);
+//     if (!hio_setup_pipe(io1))
+//         return;
 
-void hio_close_upstream(hio_t* io) {
-    hio_t* upstream_io = io->upstream_io;
-    if (upstream_io) {
-        hio_close(upstream_io);
-    }
-}
+//     if (!hio_setup_pipe(io2)){
+//         close(io1->pfd_w);
+//         close(io1->pfd_r);
+//         io1->pfd_w = io1->pfd_r = 0;
+//         return;
+//     }
+//     const int tmp_fd = io1->pfd_w;
+//     io1->pfd_w = io2->pfd_w;
+//     io2->pfd_w = tmp_fd;
+// }
+// #else
 
-#endif
+// void hio_close_upstream(hio_t* io) {
+//     hio_t* upstream_io = io->upstream_io;
+//     if (upstream_io) {
+//         hio_close(upstream_io);
+//     }
+// }
 
-void hio_setup_upstream(hio_t* restrict io1, hio_t* restrict io2) {
-    io1->upstream_io = io2;
-    io2->upstream_io = io1;
-}
+// #endif
 
-hio_t* hio_get_upstream(hio_t* io) {
-    return io->upstream_io;
-}
+// void hio_setup_upstream(hio_t* restrict io1, hio_t* restrict io2) {
+//     io1->upstream_io = io2;
+//     io2->upstream_io = io1;
+// }
 
-hio_t* hio_setup_tcp_upstream(hio_t* io, const char* host, int port, int ssl) {
-    hio_t* upstream_io = hio_create_socket(io->loop, host, port, HIO_TYPE_TCP, HIO_CLIENT_SIDE);
-    if (upstream_io == NULL) return NULL;
-    if (ssl) hio_enable_ssl(upstream_io);
-#if defined(OS_LINUX) && defined(HAVE_PIPE)
-    hio_setup_upstream_splice(io, upstream_io);
-#else
-    hio_setup_upstream(io, upstream_io);
-#endif
+// hio_t* hio_get_upstream(hio_t* io) {
+//     return io->upstream_io;
+// }
 
-    hio_setcb_read(io, hio_write_upstream);
-    hio_setcb_read(upstream_io, hio_write_upstream);
+// hio_t* hio_setup_tcp_upstream(hio_t* io, const char* host, int port) {
+//     hio_t* upstream_io = hio_create_socket(io->loop, host, port, HIO_TYPE_TCP, HIO_CLIENT_SIDE);
+//     if (upstream_io == NULL) return NULL;
+//     // #if defined(OS_LINUX) && defined(HAVE_PIPE)
+//     //     hio_setup_upstream_splice(io, upstream_io);
+//     // #else
+//     hio_setup_upstream(io, upstream_io);
+//     // #endif
 
-    hio_setcb_close(io, hio_close_upstream);
-    hio_setcb_close(upstream_io, hio_close_upstream);
-    hio_setcb_connect(upstream_io, hio_read_upstream);
-    hio_connect(upstream_io);
-    return upstream_io;
-}
+//     hio_setcb_read(io, hio_write_upstream);
+//     hio_setcb_read(upstream_io, hio_write_upstream);
 
-hio_t* hio_setup_udp_upstream(hio_t* io, const char* host, int port) {
-    hio_t* upstream_io = hio_create_socket(io->loop, host, port, HIO_TYPE_UDP, HIO_CLIENT_SIDE);
-    if (upstream_io == NULL) return NULL;
-    hio_setup_upstream(io, upstream_io);
-    hio_setcb_read(io, hio_write_upstream);
-    hio_setcb_read(upstream_io, hio_write_upstream);
-    hio_read_upstream(io);
-    return upstream_io;
-}
+//     hio_setcb_close(io, hio_close_upstream);
+//     hio_setcb_close(upstream_io, hio_close_upstream);
+//     hio_setcb_connect(upstream_io, hio_read_upstream);
+//     hio_connect(upstream_io);
+//     return upstream_io;
+// }
+
+// hio_t* hio_setup_udp_upstream(hio_t* io, const char* host, int port) {
+//     hio_t* upstream_io = hio_create_socket(io->loop, host, port, HIO_TYPE_UDP, HIO_CLIENT_SIDE);
+//     if (upstream_io == NULL) return NULL;
+//     hio_setup_upstream(io, upstream_io);
+//     hio_setcb_read(io, hio_write_upstream);
+//     hio_setcb_read(upstream_io, hio_write_upstream);
+//     hio_read_upstream(io);
+//     return upstream_io;
+// }
