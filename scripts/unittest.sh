@@ -12,6 +12,7 @@ bin/date
 bin/ifconfig
 bin/mkdir_p 123/456
 bin/ls
+bin/write_return_test || exit $?
 bin/rmdir_p 123/456
 bin/hlog_test
 

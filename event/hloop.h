@@ -468,7 +468,8 @@ HV_EXPORT int hio_close_async(hio_t* io);
 //------------------high-level apis-------------------------------------------
 // hio_get -> hio_set_readbuf -> hio_setcb_read -> hio_read
 HV_EXPORT hio_t* hread    (hloop_t* loop, int fd, void* buf, size_t len, hread_cb read_cb);
-// hio_get -> hio_setcb_write -> hio_write
+// hwrite, hsend and hsendto return the original handle if it is still open on this loop.
+// A synchronous callback can retire it, so NULL is possible even after bytes were written.
 HV_EXPORT hio_t* hwrite   (hloop_t* loop, int fd, const void* buf, size_t len, hwrite_cb write_cb DEFAULT(NULL));
 // hio_get -> hio_close
 HV_EXPORT void   hclose   (hloop_t* loop, int fd);

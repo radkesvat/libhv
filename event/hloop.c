@@ -973,8 +973,11 @@ hio_t* hwrite(hloop_t* loop, int fd, const void* buf, size_t len, hwrite_cb writ
     if (write_cb) {
         io->write_cb = write_cb;
     }
+    const uint32_t id = io->id;
     hio_write(io, buf, len);
-    return io;
+    // A synchronous callback may have closed, detached, or replaced this socket.
+    hio_t* current = loop->ios.ptr[fd];
+    return hio_is_opened(current) && current->id == id ? current : NULL;
 }
 
 hio_t* haccept(hloop_t* loop, int listenfd, haccept_cb accept_cb) {

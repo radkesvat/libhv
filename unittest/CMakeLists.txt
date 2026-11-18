@@ -86,6 +86,11 @@ target_include_directories(ftp PRIVATE .. ../base ../protocol)
 add_executable(sendmail sendmail_test.c ../protocol/smtp.c ../base/hsocket.c ../base/htime.c ../util/base64.c)
 target_include_directories(sendmail PRIVATE .. ../base ../protocol ../util)
 
+# ------event: write callback lifetime------
+add_executable(write_return_test write_return_test.c)
+target_include_directories(write_return_test PRIVATE .. ../base ../ssl ../event)
+target_link_libraries(write_return_test ${HV_LIBRARIES})
+
 # ------http------
 add_executable(http_router_test http_router_test.cpp)
 target_include_directories(http_router_test PRIVATE ../http/server)
@@ -242,6 +247,7 @@ add_custom_target(unittest DEPENDS
     ${EVENT_UNITTEST_TARGETS}
     hdns_test
     hdns_benchmark
+    write_return_test
     ${REDIS_UNITTEST_TARGETS}
     ${EVPP_DNS_UNITTEST_TARGETS}
 )
