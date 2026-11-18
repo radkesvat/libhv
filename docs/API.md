@@ -408,6 +408,7 @@
 - hio_add
 - hio_del
 - hio_get
+- hio_try_detach
 - hio_detach
 - hio_attach
 - hio_read

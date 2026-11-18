@@ -287,6 +287,12 @@ void on_accpet(hio_t* io) {
     hloop_post_event(worker_loop, &ev);
 }
  */
+// Call on the source loop with exclusive access to an attached, open io.
+// Stop I/O interest, finish pending dispatch and disarm socket timers before
+// handoff. KCP peers must also be retired. Optional timers can be rearmed
+// after attach. hio_try_detach returns 0 on success or -1 without changing
+// either the IO or the loop. hio_detach aborts if the transfer cannot proceed.
+HV_EXPORT int hio_try_detach(hio_t* io);
 HV_EXPORT void hio_detach(/*hloop_t* loop,*/ hio_t* io);
 HV_EXPORT void hio_attach(hloop_t* loop, hio_t* io);
 HV_EXPORT bool hio_exists(hloop_t* loop, int fd);

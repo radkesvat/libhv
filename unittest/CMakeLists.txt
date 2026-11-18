@@ -206,6 +206,11 @@ target_link_libraries(tcpclient_dns_test ${HV_LIBRARIES})
 set(EVPP_DNS_UNITTEST_TARGETS tcpclient_dns_test)
 endif()
 
+# ------event: IO handoff------
+add_executable(detach_timer_test detach_timer_test.c)
+target_include_directories(detach_timer_test PRIVATE .. ../base ../ssl ../event)
+target_link_libraries(detach_timer_test ${HV_LIBRARIES})
+
 if(UNIX)
 add_executable(webbench webbench.c)
 endif()
@@ -217,6 +222,7 @@ add_custom_target(unittest DEPENDS
     hatomic_test
     hthread_test
     hmutex_test
+    detach_timer_test
     connect_test
     socketpair_test
     base64

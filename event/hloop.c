@@ -844,11 +844,28 @@ hio_t* hio_get(hloop_t* loop, int fd) {
     return io;
 }
 
-void hio_detach(hio_t* io) {
+int hio_try_detach(hio_t* io) {
+    if (!hio_is_opened(io) || io->events || io->pending) return -1;
     hloop_t* loop = io->loop;
     int fd = io->fd;
-    assert(loop != NULL && fd < loop->ios.maxsize);
+    if (loop == NULL || fd < 0 || fd >= loop->ios.maxsize || loop->ios.ptr[fd] != io) return -1;
+
+    if (io->connect_timer || io->close_timer || io->read_timer || io->write_timer || io->keepalive_timer || io->heartbeat_timer) {
+        return -1;
+    }
+#if WITH_KCP
+    // Each active KCP peer owns an update timer on the current loop.
+    if (io->rudp.rb_root.rb_node != NULL) return -1;
+#endif
     loop->ios.ptr[fd] = NULL;
+    return 0;
+}
+
+void hio_detach(hio_t* io) {
+    if (hio_try_detach(io) != 0) {
+        fprintf(stderr, "hio_detach: expected an attached, open IO with no I/O interest, pending dispatch, socket timers or KCP peers\n");
+        abort();
+    }
 }
 
 void hio_attach(hloop_t* loop, hio_t* io) {

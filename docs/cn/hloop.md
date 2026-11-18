@@ -153,7 +153,12 @@ int    hio_add(hio_t* io, hio_cb cb, int events DEFAULT(HV_READ));
 // 删除IO读写事件
 int    hio_del(hio_t* io, int events DEFAULT(HV_RDWR));
 
-// 将IO对象从当前所属事件循环中剥离
+// 在原事件循环中独占操作已关联且打开的 IO 对象。先停止读写监听，等待待处理的事件分发完成，
+// 停用套接字定时器，并清理 KCP 对端。可选定时器可以在迁移到新循环后按需重新设置。
+// 成功剥离时返回 0。无法剥离时返回 -1，IO 对象和原事件循环保持原状。
+int hio_try_detach(hio_t* io);
+
+// 将 IO 对象从当前事件循环中剥离。无法剥离时终止进程。
 void hio_detach(/*hloop_t* loop,*/ hio_t* io);
 
 // 将IO对象关联到新的事件循环

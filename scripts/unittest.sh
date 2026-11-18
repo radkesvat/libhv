@@ -9,6 +9,7 @@ cd ${ROOT_DIR}
 bin/rbtree_test
 bin/hbase_test
 bin/date
+bin/detach_timer_test || exit $?
 bin/ifconfig
 bin/mkdir_p 123/456
 bin/ls
